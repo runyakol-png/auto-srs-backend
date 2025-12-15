@@ -9,13 +9,13 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// === ХРАНИЛИЩЕ ЗАКАЗОВ (пока в памяти) ===
+// === ХРАНИЛИЩЕ ЗАКАЗОВ (в памяти) ===
 let orders = [];
 
 // === TELEGRAM BOT ===
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
-// 🔥 ПАРСИНГ ЗАКАЗА ИЗ КАНАЛА
+// === ПАРСИНГ СООБЩЕНИЙ ИЗ КАНАЛА ===
 bot.on("channel_post", (ctx) => {
   const text = ctx.channelPost?.text;
   if (!text) return;
@@ -27,19 +27,22 @@ bot.on("channel_post", (ctx) => {
     .map(l => l.trim())
     .filter(Boolean);
 
-  // Первая строка — заголовок заказа
   const title = lines[0] || "Заказ";
 
-  // Имя мастера — строка с Р/с
-  const masterLine = lines.find(l => l.toLowerCase().includes("р/с"));
+  const masterLine = lines.find(l =>
+    l.toLowerCase().includes("р/с")
+  );
+
   const master = masterLine
-    ? masterLine.replace(/р\/с/gi, "").replace(/\d+/g, "").trim()
+    ? masterLine
+        .replace(/р\/с/gi, "")
+        .replace(/\d+/g, "")
+        .trim()
     : "";
 
-  // Позиции — всё кроме телефонов, цен и Р/с
   const items = lines.filter(l =>
-    !l.match(/\+?\d[\d\s\-()]{7,}/) &&      // телефоны
-    !l.match(/\d+\s*(\$|₴|грн|gel|usd)/i) && // цены
+    !l.match(/\+?\d[\d\s\-()]{7,}/) &&
+    !l.match(/\d+\s*(\$|₴|грн|gel|usd)/i) &&
     !l.toLowerCase().includes("р/с")
   );
 
@@ -55,24 +58,29 @@ bot.on("channel_post", (ctx) => {
   console.log("ORDER SAVED:", order);
 });
 
-// === WEBHOOK ДЛЯ TELEGRAM ===
+// === API ===
+app.get("/orders", (req, res) => {
+  res.json(orders);
+});
+
+// === WEBHOOK ===
 const WEBHOOK_PATH = "/bot";
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
-
-bot.telegram.setWebhook(`${WEBHOOK_URL}${WEBHOOK_PATH}`);
 
 app.post(WEBHOOK_PATH, (req, res) => {
   bot.handleUpdate(req.body, res);
 });
 
-// === API ===
-
-// получить все заказы
-app.get("/orders", (req, res) => {
-  res.json(orders);
-});
-
 // === START SERVER ===
-app.listen(PORT, () => {
-  console.log("Backend + Telegram bot running on port", PORT);
+app.listen(PORT, async () => {
+  console.log("Backend running on port", PORT);
+
+  try {
+    await bot.telegram.setWebhook(
+      `${WEBHOOK_URL}${WEBHOOK_PATH}`
+    );
+    console.log("Webhook set successfully");
+  } catch (err) {
+    console.error("Webhook error:", err);
+  }
 });
