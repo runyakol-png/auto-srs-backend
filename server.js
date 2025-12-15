@@ -30,22 +30,14 @@ function cleanItem(line) {
     .trim();
 }
 
-// ================== CHANNEL PARSER ==================
-bot.on("channel_post", (ctx) => {
-  const text = ctx.channelPost?.text;
-  if (!text) return;
-
-  console.log("NEW CHANNEL MESSAGE:\n", text);
-
+function parseOrderFromText(text) {
   const lines = text
     .split("\n")
     .map(l => l.trim())
     .filter(Boolean);
 
-  // ---- TITLE ----
   const title = lines[0] || "Заказ";
 
-  // ---- MASTER ----
   const masterLine = lines.find(l =>
     l.toLowerCase().includes("р/с")
   );
@@ -58,7 +50,6 @@ bot.on("channel_post", (ctx) => {
         .trim()
     : "";
 
-  // ---- ITEMS ----
   const items = lines
     .slice(1)
     .filter(l =>
@@ -72,11 +63,21 @@ bot.on("channel_post", (ctx) => {
       done: false
     }));
 
+  return { title, master, items };
+}
+
+// ================== CHANNEL PARSER ==================
+bot.on("channel_post", (ctx) => {
+  const text = ctx.channelPost?.text;
+  if (!text) return;
+
+  console.log("NEW CHANNEL MESSAGE:\n", text);
+
+  const parsed = parseOrderFromText(text);
+
   const order = {
     id: Date.now(),
-    title,
-    items,
-    master,
+    ...parsed,
     createdAt: new Date().toISOString()
   };
 
@@ -118,19 +119,24 @@ app.delete("/orders/:orderId", (req, res) => {
   res.sendStatus(204);
 });
 
-// Редактировать заказ
-app.put("/orders/:orderId", (req, res) => {
+// ❗ РЕДАКТИРОВАНИЕ ВСЕГО ЗАКАЗА ЧЕРЕЗ ТЕКСТ
+app.put("/orders/:orderId/raw", (req, res) => {
   const { orderId } = req.params;
-  const { title, master, items } = req.body;
+  const { text } = req.body;
 
-  const order = orders.find(o => o.id == orderId);
-  if (!order) return res.status(404).json({ error: "Order not found" });
+  const index = orders.findIndex(o => o.id == orderId);
+  if (index === -1) {
+    return res.status(404).json({ error: "Order not found" });
+  }
 
-  if (title !== undefined) order.title = title;
-  if (master !== undefined) order.master = master;
-  if (items !== undefined) order.items = items;
+  const parsed = parseOrderFromText(text);
 
-  res.json(order);
+  orders[index] = {
+    ...orders[index],
+    ...parsed
+  };
+
+  res.json(orders[index]);
 });
 
 // ================== WEBHOOK ==================
