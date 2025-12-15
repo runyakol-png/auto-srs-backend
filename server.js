@@ -23,9 +23,10 @@ const bot = new Telegraf(BOT_TOKEN);
 // === HELPERS ===
 function cleanItem(line) {
   return line
-    .replace(/\+?\d[\d\s\-()]{7,}/g, "")     // телефоны
-    .replace(/\d+\s*(\$|₴|грн|gel|usd)/gi, "") // цены
-    .replace(/\d+/g, "")                    // остаточные цифры
+    .replace(/\+?\d[\d\s\-()]{7,}/g, "")                 // телефоны
+    .replace(/\d+\s*(\$|₴|грн|gel|usd)/gi, "")           // цены
+    .replace(/\b(грн|uah|gel|usd|\$|₴)\b/gi, "")         // валюты
+    .replace(/\d+/g, "")                                 // остаточные цифры
     .trim();
 }
 
@@ -52,10 +53,11 @@ bot.on("channel_post", (ctx) => {
     ? masterLine
         .replace(/р\/с/gi, "")
         .replace(/\d+/g, "")
+        .replace(/\b(грн|uah|gel|usd|\$|₴)\b/gi, "")
         .trim()
     : "";
 
-  // --- ITEMS ---
+  // --- ITEMS (СО СТАТУСОМ) ---
   const items = lines
     .slice(1)
     .filter(l =>
@@ -63,7 +65,11 @@ bot.on("channel_post", (ctx) => {
       !l.match(/\+?\d[\d\s\-()]{7,}/)
     )
     .map(cleanItem)
-    .filter(Boolean);
+    .filter(Boolean)
+    .map(name => ({
+      name,
+      done: false
+    }));
 
   const order = {
     id: Date.now(),
@@ -74,13 +80,26 @@ bot.on("channel_post", (ctx) => {
   };
 
   orders.unshift(order);
-
   console.log("ORDER SAVED:", order);
 });
 
 // === API ===
 app.get("/orders", (req, res) => {
   res.json(orders);
+});
+
+// === TOGGLE ITEM STATUS ===
+app.post("/orders/:orderId/items/:index/toggle", (req, res) => {
+  const { orderId, index } = req.params;
+
+  const order = orders.find(o => o.id == orderId);
+  if (!order) return res.sendStatus(404);
+
+  const item = order.items[index];
+  if (!item) return res.sendStatus(404);
+
+  item.done = !item.done;
+  res.json(item);
 });
 
 // === WEBHOOK ===
