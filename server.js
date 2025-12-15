@@ -5,14 +5,14 @@ import { Telegraf } from "telegraf";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// === MIDDLEWARE ===
+// ================== MIDDLEWARE ==================
 app.use(cors());
 app.use(express.json());
 
-// === STORAGE (in-memory) ===
+// ================== STORAGE ==================
 let orders = [];
 
-// === BOT ===
+// ================== BOT ==================
 const BOT_TOKEN = process.env.BOT_TOKEN;
 if (!BOT_TOKEN) {
   throw new Error("BOT_TOKEN is not defined");
@@ -20,17 +20,17 @@ if (!BOT_TOKEN) {
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// === HELPERS ===
+// ================== HELPERS ==================
 function cleanItem(line) {
   return line
     .replace(/\+?\d[\d\s\-()]{7,}/g, "")                 // телефоны
-    .replace(/\d+\s*(\$|₴|грн|gel|usd)/gi, "")           // цены
+    .replace(/\d+\s*(\$|₴|грн|uah|gel|usd)/gi, "")       // цены
     .replace(/\b(грн|uah|gel|usd|\$|₴)\b/gi, "")         // валюты
-    .replace(/\d+/g, "")                                 // остаточные цифры
+    .replace(/\d+/g, "")                                 // цифры
     .trim();
 }
 
-// === CHANNEL PARSER ===
+// ================== CHANNEL PARSER ==================
 bot.on("channel_post", (ctx) => {
   const text = ctx.channelPost?.text;
   if (!text) return;
@@ -42,10 +42,10 @@ bot.on("channel_post", (ctx) => {
     .map(l => l.trim())
     .filter(Boolean);
 
-  // --- TITLE ---
+  // ---- TITLE ----
   const title = lines[0] || "Заказ";
 
-  // --- MASTER ---
+  // ---- MASTER ----
   const masterLine = lines.find(l =>
     l.toLowerCase().includes("р/с")
   );
@@ -58,7 +58,7 @@ bot.on("channel_post", (ctx) => {
         .trim()
     : "";
 
-  // --- ITEMS ---
+  // ---- ITEMS ----
   const items = lines
     .slice(1)
     .filter(l =>
@@ -81,16 +81,17 @@ bot.on("channel_post", (ctx) => {
   };
 
   orders.unshift(order);
-
   console.log("ORDER SAVED:", JSON.stringify(order, null, 2));
 });
 
-// === API ===
+// ================== API ==================
+
+// Получить все заказы
 app.get("/orders", (req, res) => {
   res.json(orders);
 });
 
-// === TOGGLE ITEM STATUS ===
+// Переключить статус позиции
 app.patch("/orders/:orderId/items/:index", (req, res) => {
   const { orderId, index } = req.params;
 
@@ -101,11 +102,38 @@ app.patch("/orders/:orderId/items/:index", (req, res) => {
   if (!item) return res.status(404).json({ error: "Item not found" });
 
   item.done = !item.done;
-
   res.json(item);
 });
 
-// === WEBHOOK ===
+// Удалить заказ
+app.delete("/orders/:orderId", (req, res) => {
+  const { orderId } = req.params;
+  const index = orders.findIndex(o => o.id == orderId);
+
+  if (index === -1) {
+    return res.status(404).json({ error: "Order not found" });
+  }
+
+  orders.splice(index, 1);
+  res.sendStatus(204);
+});
+
+// Редактировать заказ
+app.put("/orders/:orderId", (req, res) => {
+  const { orderId } = req.params;
+  const { title, master, items } = req.body;
+
+  const order = orders.find(o => o.id == orderId);
+  if (!order) return res.status(404).json({ error: "Order not found" });
+
+  if (title !== undefined) order.title = title;
+  if (master !== undefined) order.master = master;
+  if (items !== undefined) order.items = items;
+
+  res.json(order);
+});
+
+// ================== WEBHOOK ==================
 const WEBHOOK_PATH = "/webhook";
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
 
@@ -114,7 +142,7 @@ app.post(WEBHOOK_PATH, (req, res) => {
   res.sendStatus(200);
 });
 
-// === START ===
+// ================== START ==================
 app.listen(PORT, async () => {
   console.log("Backend running on port", PORT);
 
