@@ -20,6 +20,15 @@ if (!BOT_TOKEN) {
 
 const bot = new Telegraf(BOT_TOKEN);
 
+// === HELPERS ===
+function cleanItem(line) {
+  return line
+    .replace(/\+?\d[\d\s\-()]{7,}/g, "")     // телефоны
+    .replace(/\d+\s*(\$|₴|грн|gel|usd)/gi, "") // цены
+    .replace(/\d+/g, "")                    // остаточные цифры
+    .trim();
+}
+
 // === CHANNEL PARSER ===
 bot.on("channel_post", (ctx) => {
   const text = ctx.channelPost?.text;
@@ -34,6 +43,7 @@ bot.on("channel_post", (ctx) => {
 
   const title = lines[0] || "Заказ";
 
+  // --- МАСТЕР ---
   const masterLine = lines.find(l =>
     l.toLowerCase().includes("р/с")
   );
@@ -45,11 +55,15 @@ bot.on("channel_post", (ctx) => {
         .trim()
     : "";
 
-  const items = lines.filter(l =>
-    !l.match(/\+?\d[\d\s\-()]{7,}/) &&
-    !l.match(/\d+\s*(\$|₴|грн|gel|usd)/i) &&
-    !l.toLowerCase().includes("р/с")
-  );
+  // --- ITEMS ---
+  const items = lines
+    .slice(1)
+    .filter(l =>
+      !l.toLowerCase().includes("р/с") &&
+      !l.match(/\+?\d[\d\s\-()]{7,}/)
+    )
+    .map(cleanItem)
+    .filter(Boolean);
 
   const order = {
     id: Date.now(),
@@ -60,6 +74,7 @@ bot.on("channel_post", (ctx) => {
   };
 
   orders.unshift(order);
+
   console.log("ORDER SAVED:", order);
 });
 
