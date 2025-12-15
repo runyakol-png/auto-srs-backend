@@ -1,39 +1,33 @@
 import express from "express";
+import cors from "cors";
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(cors());
 app.use(express.json());
 
 let orders = [];
 
-function cleanOrder(text) {
-  return text
-    .replace(/\+?\d[\d\s\-()]{7,}/g, "")     // телефоны
-    .replace(/\d+\s?(₾|\$|грн|gel|usd)/gi, "") // цены
-    .replace(/р\/с.*$/gim, "")               // р/с строка
-    .replace(/\n{2,}/g, "\n")
-    .trim();
-}
-
-app.post("/telegram", (req, res) => {
-  const msg = req.body?.message?.text || req.body?.channel_post?.text;
-  if (!msg) return res.sendStatus(200);
-
-  const clean = cleanOrder(msg);
-
-  orders.unshift({
-    id: Date.now(),
-    text: clean
-  });
-
-  res.sendStatus(200);
-});
-
+/* Получить все заказы */
 app.get("/orders", (req, res) => {
   res.json(orders);
 });
 
-app.get("/", (req, res) => {
-  res.send("AUTO SRS backend OK");
+/* Добавить заказ */
+app.post("/orders", (req, res) => {
+  const order = {
+    id: Date.now(),
+    title: req.body.title,
+    items: req.body.items,
+    master: req.body.master,
+    createdAt: new Date().toISOString()
+  };
+
+  orders.unshift(order);
+  res.json({ success: true });
 });
 
-app.listen(3000, () => console.log("Backend running on 3000"));
+app.listen(PORT, () => {
+  console.log("Backend running on", PORT);
+});
