@@ -42,9 +42,10 @@ bot.on("channel_post", (ctx) => {
     .map(l => l.trim())
     .filter(Boolean);
 
+  // --- TITLE ---
   const title = lines[0] || "Заказ";
 
-  // --- МАСТЕР ---
+  // --- MASTER ---
   const masterLine = lines.find(l =>
     l.toLowerCase().includes("р/с")
   );
@@ -57,7 +58,7 @@ bot.on("channel_post", (ctx) => {
         .trim()
     : "";
 
-  // --- ITEMS (СО СТАТУСОМ) ---
+  // --- ITEMS ---
   const items = lines
     .slice(1)
     .filter(l =>
@@ -80,7 +81,8 @@ bot.on("channel_post", (ctx) => {
   };
 
   orders.unshift(order);
-  console.log("ORDER SAVED:", order);
+
+  console.log("ORDER SAVED:", JSON.stringify(order, null, 2));
 });
 
 // === API ===
@@ -89,16 +91,17 @@ app.get("/orders", (req, res) => {
 });
 
 // === TOGGLE ITEM STATUS ===
-app.post("/orders/:orderId/items/:index/toggle", (req, res) => {
+app.patch("/orders/:orderId/items/:index", (req, res) => {
   const { orderId, index } = req.params;
 
   const order = orders.find(o => o.id == orderId);
-  if (!order) return res.sendStatus(404);
+  if (!order) return res.status(404).json({ error: "Order not found" });
 
   const item = order.items[index];
-  if (!item) return res.sendStatus(404);
+  if (!item) return res.status(404).json({ error: "Item not found" });
 
   item.done = !item.done;
+
   res.json(item);
 });
 
